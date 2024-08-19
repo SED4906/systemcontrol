@@ -65,12 +65,14 @@ impl eframe::App for SystemControlApp {
                 self.units = Some(async { list_units().await.unwrap() }.block_on());
             }
             egui::ScrollArea::vertical().show(ui, |ui| {
-                for unit in self
+                let mut units_sorted = self
                     .units
                     .as_ref()
                     .unwrap()
-                    .deserialize::<UnitInfo>() // yowsa!
-                    .unwrap()
+                    .deserialize::<UnitInfo>()
+                    .unwrap();
+                units_sorted.sort_by_key(|u| u.clone().0);
+                for unit in units_sorted.clone().into_iter()
                 {
                     CollapsingHeader::new(unit.0.clone().as_str().to_unescaped().unwrap())
                         .default_open(false)
