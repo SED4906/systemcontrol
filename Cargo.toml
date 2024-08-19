@@ -1,0 +1,15 @@
+[package]
+name = "systemcontrol"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+zbus = "4.4.0"
+zbus_polkit = "4.0.0"
+eframe = "0.28.1"
+descape = "1.1.2"
+pollster = "0.3.0"
+
+[dependencies.tokio]
+version = "1.39.3"
+features = ["rt", "rt-multi-thread", "time"]
