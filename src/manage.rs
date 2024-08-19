@@ -13,7 +13,6 @@ pub async fn enable(units: Vec<String>) -> Result<(), Box<dyn Error>> {
         )
         .await?
         .body();
-    //println!("{reply_body:?}");
     Ok(())
 }
 
@@ -29,7 +28,6 @@ pub async fn disable(units: Vec<String>) -> Result<(), Box<dyn Error>> {
         )
         .await?
         .body();
-    //println!("{reply_body:?}");
     Ok(())
 }
 
@@ -45,7 +43,6 @@ pub async fn start(unit: String) -> Result<(), Box<dyn Error>> {
         )
         .await?
         .body();
-    //println!("{reply_body:?}");
     Ok(())
 }
 
@@ -61,6 +58,5 @@ pub async fn stop(unit: String) -> Result<(), Box<dyn Error>> {
         )
         .await?
         .body();
-    //println!("{reply_body:?}");
     Ok(())
 }
