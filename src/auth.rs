@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error};
+use std::error::Error;
 
 use zbus::Connection;
 use zbus_polkit::policykit1::{AuthorityProxy, AuthorizationResult, CheckAuthorizationFlags, Subject};

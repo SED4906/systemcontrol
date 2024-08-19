@@ -36,7 +36,7 @@ struct SystemControlApp {
 }
 
 impl SystemControlApp {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
         // Restore app state using cc.storage (requires the "persistence" feature).
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
@@ -59,7 +59,7 @@ type UnitInfo<'a> = Vec<(
                     )>;
 
 impl eframe::App for SystemControlApp {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.units.is_none() || ui.button("Reload Unit List").clicked() {
                 self.units = Some(async { list_units().await.unwrap() }.block_on());
