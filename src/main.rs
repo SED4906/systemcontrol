@@ -19,8 +19,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rt = Runtime::new()?;
     let _enter = rt.enter();
     let _dbus_thread = rt.spawn(async { tokio::time::sleep(Duration::MAX).await });
-    let auth = async{authenticate().await}.block_on()?;
-    println!("{auth:?}");
+    //let auth = async{authenticate().await}.block_on()?;
+    //println!("{auth:?}");
     let native_options = eframe::NativeOptions::default();
     let _ = eframe::run_native(
         "System Control",
@@ -80,24 +80,20 @@ impl eframe::App for SystemControlApp {
                             ui.label(format!("{}, {}, {}. {}", unit.2.clone(), unit.3.clone(), unit.4.clone(), unit.5.clone()));
                             ui.horizontal(|ui| {
                                 if ui.button("Enable").clicked() {
-                                    async { manage::enable(vec![unit.0.clone()]).await }
-                                        .block_on()
-                                        .unwrap();
+                                    let _ = async { manage::enable(vec![unit.0.clone()]).await }
+                                        .block_on();
                                 }
                                 if ui.button("Disable").clicked() {
-                                    async { manage::disable(vec![unit.0.clone()]).await }
-                                        .block_on()
-                                        .unwrap();
+                                    let _ = async { manage::disable(vec![unit.0.clone()]).await }
+                                        .block_on();
                                 }
                                 if ui.button("Start").clicked() {
-                                    async { manage::start(unit.0.clone()).await }
-                                        .block_on()
-                                        .unwrap();
+                                    let _ = async { manage::start(unit.0.clone()).await }
+                                        .block_on();
                                 }
                                 if ui.button("Stop").clicked() {
-                                    async { manage::stop(unit.0.clone()).await }
-                                        .block_on()
-                                        .unwrap();
+                                    let _ = async { manage::stop(unit.0.clone()).await }
+                                        .block_on();
                                 }
                             })
                         });
