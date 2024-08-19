@@ -2696,7 +2696,6 @@ dependencies = [
  "pollster",
  "tokio",
  "zbus 4.4.0",
- "zbus_polkit",
 ]
 
 [[package]]
@@ -3863,19 +3862,6 @@ dependencies = [
  "serde",
  "static_assertions",
  "zvariant 4.2.0",
-]
-
-[[package]]
-name = "zbus_polkit"
-version = "4.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00a29bfa927b29f91b7feb4e1990f2dd1b4604072f493dc2f074cf59e4e0ba90"
-dependencies = [
- "enumflags2",
- "serde",
- "serde_repr",
- "static_assertions",
- "zbus 4.4.0",
 ]
 
 [[package]]

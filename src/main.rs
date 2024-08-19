@@ -2,7 +2,7 @@ mod manage;
 mod units;
 
 use std::{
-    collections::BTreeSet, time::Duration, vec
+    collections::BTreeMap, time::Duration, vec
 };
 
 use descape::UnescapeExt;
@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[derive(Default)]
 struct SystemControlApp {
-    units: BTreeSet<OwnableUnitInfo>,
+    units: BTreeMap<String,OwnableUnitInfo>,
     refresh: bool,
 }
 
@@ -37,13 +37,12 @@ impl SystemControlApp {
         // Restore app state using cc.storage (requires the "persistence" feature).
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
-        Self { refresh: true, units: BTreeSet::new() }
+        Self { refresh: true, units: BTreeMap::new() }
     }
 }
 
 #[derive(PartialEq, PartialOrd, Eq, Ord)]
 pub struct OwnableUnitInfo {
-    name: String,
     description: String,
     loaded: String,
     active: String,
@@ -70,35 +69,35 @@ impl eframe::App for SystemControlApp {
                 let unsorted_units = async { list_units().await.unwrap() }.block_on();
                 let unsorted_units = unsorted_units.deserialize::<UnitInfo>().unwrap();
                 for unit in unsorted_units {
-                    self.units.insert(OwnableUnitInfo {name: unit.0.clone(), description: unit.2.clone(), loaded: unit.3.clone(), active: unit.4.clone(), subunit: unit.5.clone()});
+                    self.units.insert(unit.0.clone(), OwnableUnitInfo {description: unit.2.clone(), loaded: unit.3.clone(), active: unit.4.clone(), subunit: unit.5.clone()});
                 }
                 self.refresh = false;
             }
             egui::ScrollArea::vertical().show(ui, |ui| {
-                for unit in &self.units
+                for (name,unit) in &self.units
                 {
-                    CollapsingHeader::new(unit.name.clone().as_str().to_unescaped().unwrap())
+                    CollapsingHeader::new(name.clone().as_str().to_unescaped().unwrap())
                         .default_open(false)
                         .show(ui, |ui| {
                             ui.label(format!("{}, {}, {}. {}", unit.description.clone(), unit.loaded.clone(), unit.active.clone(), unit.subunit.clone()));
                             ui.horizontal(|ui| {
                                 if ui.button("Enable").clicked() {
-                                    let _ = async { manage::enable(vec![unit.name.clone()]).await }
+                                    let _ = async { manage::enable(vec![name.clone()]).await }
                                         .block_on();
                                     self.refresh = true;
                                 }
                                 if ui.button("Disable").clicked() {
-                                    let _ = async { manage::disable(vec![unit.name.clone()]).await }
+                                    let _ = async { manage::disable(vec![name.clone()]).await }
                                         .block_on();
                                     self.refresh = true;
                                 }
                                 if ui.button("Start").clicked() {
-                                    let _ = async { manage::start(unit.name.clone()).await }
+                                    let _ = async { manage::start(name.clone()).await }
                                         .block_on();
                                     self.refresh = true;
                                 }
                                 if ui.button("Stop").clicked() {
-                                    let _ = async { manage::stop(unit.name.clone()).await }
+                                    let _ = async { manage::stop(name.clone()).await }
                                         .block_on();
                                     self.refresh = true;
                                 }
