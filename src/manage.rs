@@ -33,21 +33,34 @@ pub async fn disable(units: Vec<String>) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub async fn is_enabled(unit: String) -> Result<bool, Box<dyn Error>> {
+pub async fn start(unit: String) -> Result<(), Box<dyn Error>> {
     let connection = Connection::system().await?;
     let reply_body = connection
         .call_method(
             Some("org.freedesktop.systemd1"),
             "/org/freedesktop/systemd1",
             Some("org.freedesktop.systemd1.Manager"),
-            "GetUnitFileState",
-            &(unit),
+            "StartUnit",
+            &(unit, "replace"),
         )
         .await?
         .body();
-    let state = reply_body.deserialize::<&str>().unwrap();
-    Ok(match state {
-        "enabled" | "enabled-runtime" | "static" | "alias" | "indirect" | "generated" => true,
-        _ => false,
-    })
+    println!("{reply_body:?}");
+    Ok(())
+}
+
+pub async fn stop(unit: String) -> Result<(), Box<dyn Error>> {
+    let connection = Connection::system().await?;
+    let reply_body = connection
+        .call_method(
+            Some("org.freedesktop.systemd1"),
+            "/org/freedesktop/systemd1",
+            Some("org.freedesktop.systemd1.Manager"),
+            "StopUnit",
+            &(unit, "replace"),
+        )
+        .await?
+        .body();
+    println!("{reply_body:?}");
+    Ok(())
 }

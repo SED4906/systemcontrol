@@ -1,10 +1,8 @@
-mod enable_disable;
+mod manage;
 mod units;
 mod auth;
 
 use std::{
-    collections::HashMap,
-    sync::mpsc::{Receiver, Sender},
     time::Duration,
     vec,
 };
@@ -47,6 +45,19 @@ impl SystemControlApp {
     }
 }
 
+type UnitInfo<'a> = Vec<(
+                        String,
+                        String,
+                        String,
+                        String,
+                        String,
+                        String,
+                        ObjectPath<'a>,
+                        u32,
+                        String,
+                        ObjectPath<'a>,
+                    )>;
+
 impl eframe::App for SystemControlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -58,31 +69,31 @@ impl eframe::App for SystemControlApp {
                     .units
                     .as_ref()
                     .unwrap()
-                    .deserialize::<Vec<(
-                        String,
-                        String,
-                        String,
-                        String,
-                        String,
-                        String,
-                        ObjectPath,
-                        u32,
-                        String,
-                        ObjectPath,
-                    )>>() // yowsa!
+                    .deserialize::<UnitInfo>() // yowsa!
                     .unwrap()
                 {
                     CollapsingHeader::new(unit.0.clone().as_str().to_unescaped().unwrap())
                         .default_open(false)
                         .show(ui, |ui| {
+                            ui.label(format!("{}, {}, {}. {}", unit.2.clone(), unit.3.clone(), unit.4.clone(), unit.5.clone()));
                             ui.horizontal(|ui| {
-                                if ui.button("Disable").clicked() {
-                                    async { enable_disable::disable(vec![unit.0.clone()]).await }
+                                if ui.button("Enable").clicked() {
+                                    async { manage::enable(vec![unit.0.clone()]).await }
                                         .block_on()
                                         .unwrap();
                                 }
-                                if ui.button("Enable").clicked() {
-                                    async { enable_disable::enable(vec![unit.0.clone()]).await }
+                                if ui.button("Disable").clicked() {
+                                    async { manage::disable(vec![unit.0.clone()]).await }
+                                        .block_on()
+                                        .unwrap();
+                                }
+                                if ui.button("Start").clicked() {
+                                    async { manage::start(unit.0.clone()).await }
+                                        .block_on()
+                                        .unwrap();
+                                }
+                                if ui.button("Stop").clicked() {
+                                    async { manage::stop(unit.0.clone()).await }
                                         .block_on()
                                         .unwrap();
                                 }
