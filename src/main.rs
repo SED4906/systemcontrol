@@ -31,6 +31,8 @@ struct SystemControlApp {
     system_units: BTreeMap<String, UnitInfo>,
     unit_log: String,
     refresh: bool,
+    show_inactive: bool,
+    unit_filter: String,
 }
 
 impl SystemControlApp {
@@ -44,6 +46,8 @@ impl SystemControlApp {
             user_units: BTreeMap::new(),
             system_units: BTreeMap::new(),
             unit_log: String::new(),
+            show_inactive: true,
+            unit_filter: String::new(),
         }
     }
 }
@@ -72,7 +76,11 @@ type RawUnitInfo<'a> = Vec<(
 impl eframe::App for SystemControlApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show_inside(ui, |ui| {
-            self.refresh |= ui.button("Refresh").clicked();
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut self.unit_filter).hint_text("Filter..."));
+                ui.checkbox(&mut self.show_inactive, "Show Inactive");
+                self.refresh |= ui.button("Refresh").clicked();
+            });
             if self.refresh {
                 let unsorted_user_units = async { list_user_units().await.unwrap() }.block_on();
                 let unsorted_user_units = unsorted_user_units.deserialize::<RawUnitInfo>().unwrap();
@@ -150,10 +158,27 @@ impl SystemControlApp {
         } else {
             &self.system_units
         } {
+            if !name.contains(self.unit_filter.as_str()) {
+                continue;
+            }
+            match unit.active.clone().as_str() {
+                _ if self.show_inactive => {}
+                "running" | "active" | "mounted" | "plugged" => {}
+                _ => continue,
+            }
             let id = ui.make_persistent_id(name.clone().as_str().to_unescaped().unwrap());
             egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false)
-                .show_header(ui, |ui| {
-                    ui.add(egui::Label::new(name.clone().as_str().to_unescaped().unwrap()).wrap());
+                .show_header(ui, |ui| match unit.active.clone().as_str() {
+                    "running" | "active" | "mounted" | "plugged" if self.show_inactive => ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(name.clone().as_str().to_unescaped().unwrap())
+                                .underline(),
+                        )
+                        .wrap(),
+                    ),
+                    _ => ui.add(
+                        egui::Label::new(name.clone().as_str().to_unescaped().unwrap()).wrap(),
+                    ),
                 })
                 .body(|ui| {
                     ui.label(format!(
