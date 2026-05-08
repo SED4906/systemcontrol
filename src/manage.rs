@@ -1,8 +1,7 @@
 use std::error::Error;
 use zbus::Connection;
 
-pub async fn enable(units: Vec<String>) -> Result<(), Box<dyn Error>> {
-    let connection = Connection::system().await?;
+pub async fn enable(connection: Connection, units: Vec<String>) -> Result<(), Box<dyn Error>> {
     let _ = connection
         .call_method(
             Some("org.freedesktop.systemd1"),
@@ -16,8 +15,7 @@ pub async fn enable(units: Vec<String>) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub async fn disable(units: Vec<String>) -> Result<(), Box<dyn Error>> {
-    let connection = Connection::system().await?;
+pub async fn disable(connection: Connection, units: Vec<String>) -> Result<(), Box<dyn Error>> {
     let _ = connection
         .call_method(
             Some("org.freedesktop.systemd1"),
@@ -31,8 +29,7 @@ pub async fn disable(units: Vec<String>) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub async fn start(unit: String) -> Result<(), Box<dyn Error>> {
-    let connection = Connection::system().await?;
+pub async fn start(connection: Connection, unit: String) -> Result<(), Box<dyn Error>> {
     let _ = connection
         .call_method(
             Some("org.freedesktop.systemd1"),
@@ -46,8 +43,7 @@ pub async fn start(unit: String) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub async fn stop(unit: String) -> Result<(), Box<dyn Error>> {
-    let connection = Connection::system().await?;
+pub async fn stop(connection: Connection, unit: String) -> Result<(), Box<dyn Error>> {
     let _ = connection
         .call_method(
             Some("org.freedesktop.systemd1"),

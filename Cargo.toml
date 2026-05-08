@@ -1,20 +1,24 @@
 [package]
 name = "systemcontrol"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-zbus = "4.4.0"
-eframe = "0.28.1"
-descape = "1.1.2"
-pollster = "0.3.0"
+zbus = "5.15.0"
+descape = "3.0.0"
+pollster = "0.4.0"
+
+[dependencies.eframe]
+version = "0.34.2"
+default-features = false
+features = ["wayland", "wgpu", "default_fonts"]
 
 [dependencies.tokio]
-version = "1.39.3"
+version = "1.52.2"
 features = ["rt", "rt-multi-thread", "time"]
 
 [profile.release]
 strip = true
 lto = "fat"
-opt-level = "z"
+opt-level = "s"
 panic = "abort"
