@@ -1,4 +1,3 @@
-mod manage;
 mod units;
 
 use std::{collections::BTreeMap, process::Command, time::Duration, vec};
@@ -7,10 +6,9 @@ use descape::UnescapeExt;
 use eframe::egui;
 use pollster::FutureExt;
 use tokio::runtime::Runtime;
-use units::list_user_units;
-use zbus::{Connection, zvariant::ObjectPath};
+use zbus::{Connection, connection::Builder};
 
-use crate::units::list_system_units;
+use crate::units::UnitInfo;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rt = Runtime::new()?;
@@ -48,27 +46,6 @@ impl SystemControlApp {
     }
 }
 
-#[derive(PartialEq, PartialOrd, Eq, Ord)]
-pub struct UnitInfo {
-    description: String,
-    loaded: String,
-    active: String,
-    subunit: String,
-}
-
-type RawUnitInfo<'a> = Vec<(
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    ObjectPath<'a>,
-    u32,
-    String,
-    ObjectPath<'a>,
-)>;
-
 impl eframe::App for SystemControlApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show_inside(ui, |ui| {
@@ -78,33 +55,17 @@ impl eframe::App for SystemControlApp {
                 self.refresh |= ui.button("Refresh").clicked();
             });
             if self.refresh {
-                let unsorted_user_units = async { list_user_units().await.unwrap() }.block_on();
-                let unsorted_user_units = unsorted_user_units.deserialize::<RawUnitInfo>().unwrap();
-                for unit in unsorted_user_units {
-                    self.user_units.insert(
-                        unit.0.clone(),
-                        UnitInfo {
-                            description: unit.2.clone(),
-                            loaded: unit.3.clone(),
-                            active: unit.4.clone(),
-                            subunit: unit.5.clone(),
-                        },
-                    );
+                if let Ok(user_units) =
+                    async { units::list_units(Connection::session().await?).await }.block_on()
+                {
+                    self.user_units = user_units;
                 }
-                let unsorted_system_units = async { list_system_units().await.unwrap() }.block_on();
-                let unsorted_system_units =
-                    unsorted_system_units.deserialize::<RawUnitInfo>().unwrap();
-                for unit in unsorted_system_units {
-                    self.system_units.insert(
-                        unit.0.clone(),
-                        UnitInfo {
-                            description: unit.2.clone(),
-                            loaded: unit.3.clone(),
-                            active: unit.4.clone(),
-                            subunit: unit.5.clone(),
-                        },
-                    );
+                if let Ok(system_units) =
+                    async { units::list_units(Connection::system().await?).await }.block_on()
+                {
+                    self.system_units = system_units;
                 }
+
                 self.refresh = false;
             }
             egui::Panel::left("User units").show_inside(ui, |ui| {
@@ -123,7 +84,13 @@ impl eframe::App for SystemControlApp {
                 });
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     self.unit_list(false, ui, || {
-                        async { Connection::system().await }.block_on()
+                        async {
+                            Builder::system()?
+                                .auth_mechanism(zbus::AuthMechanism::External)
+                                .build()
+                                .await
+                        }
+                        .block_on()
                     })
                 })
             });
@@ -185,7 +152,7 @@ impl SystemControlApp {
                         if ui.button("Enable").clicked() {
                             let _ = async {
                                 let connection = connection()?;
-                                manage::enable(connection, vec![name.clone()]).await
+                                units::enable(connection, vec![name.clone()]).await
                             }
                             .block_on();
                             self.refresh = true;
@@ -193,7 +160,7 @@ impl SystemControlApp {
                         if ui.button("Disable").clicked() {
                             let _ = async {
                                 let connection = connection()?;
-                                manage::disable(connection, vec![name.clone()]).await
+                                units::disable(connection, vec![name.clone()]).await
                             }
                             .block_on();
                             self.refresh = true;
@@ -201,7 +168,7 @@ impl SystemControlApp {
                         if ui.button("Start").clicked() {
                             let _ = async {
                                 let connection = connection()?;
-                                manage::start(connection, name.clone()).await
+                                units::start(connection, name.clone()).await
                             }
                             .block_on();
                             self.refresh = true;
@@ -209,7 +176,7 @@ impl SystemControlApp {
                         if ui.button("Stop").clicked() {
                             let _ = async {
                                 let connection = connection()?;
-                                manage::stop(connection, name.clone()).await
+                                units::stop(connection, name.clone()).await
                             }
                             .block_on();
                             self.refresh = true;
