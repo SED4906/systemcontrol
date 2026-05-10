@@ -37,10 +37,6 @@ struct SystemControlApp {
 
 impl SystemControlApp {
     fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
-        // Restore app state using cc.storage (requires the "persistence" feature).
-        // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
-        // for e.g. egui::PaintCallback.
         Self {
             refresh: true,
             user_units: BTreeMap::new(),
@@ -136,10 +132,7 @@ impl eframe::App for SystemControlApp {
                     ui.heading("Unit log");
                 });
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.add(
-                        egui::Label::new(self.unit_log.clone().as_str().to_unescaped().unwrap())
-                            .wrap(),
-                    );
+                    ui.add(egui::Label::new(self.unit_log.clone().as_str()).wrap());
                 })
             });
         });
