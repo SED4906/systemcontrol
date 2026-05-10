@@ -1,16 +1,16 @@
 mod units;
 
-use std::{collections::BTreeMap, process::Command, time::Duration, vec};
+use std::{collections::BTreeMap, error::Error, process::Command, time::Duration, vec};
 
 use descape::UnescapeExt;
 use eframe::egui;
 use pollster::FutureExt;
 use tokio::runtime::Runtime;
-use zbus::{Connection, connection::Builder};
+use zbus::Connection;
 
 use crate::units::UnitInfo;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     let rt = Runtime::new()?;
     let _enter = rt.enter();
     let _dbus_thread = rt.spawn(async { tokio::time::sleep(Duration::MAX).await });
@@ -30,6 +30,7 @@ struct SystemControlApp {
     unit_log: String,
     refresh: bool,
     show_inactive: bool,
+    hide_success: bool,
     unit_filter: String,
 }
 
@@ -41,6 +42,7 @@ impl SystemControlApp {
             system_units: BTreeMap::new(),
             unit_log: String::new(),
             show_inactive: true,
+            hide_success: false,
             unit_filter: String::new(),
         }
     }
@@ -52,6 +54,7 @@ impl eframe::App for SystemControlApp {
             ui.horizontal(|ui| {
                 ui.add(egui::TextEdit::singleline(&mut self.unit_filter).hint_text("Filter..."));
                 ui.checkbox(&mut self.show_inactive, "Show Inactive");
+                ui.checkbox(&mut self.hide_success, "Failed");
                 self.refresh |= ui.button("Refresh").clicked();
             });
             if self.refresh {
@@ -84,13 +87,7 @@ impl eframe::App for SystemControlApp {
                 });
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     self.unit_list(false, ui, || {
-                        async {
-                            Builder::system()?
-                                .auth_mechanism(zbus::AuthMechanism::External)
-                                .build()
-                                .await
-                        }
-                        .block_on()
+                        async { Connection::system().await }.block_on()
                     })
                 })
             });
@@ -99,7 +96,7 @@ impl eframe::App for SystemControlApp {
                     ui.heading("Unit log");
                 });
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.add(egui::Label::new(self.unit_log.clone().as_str()).wrap());
+                    ui.add(egui::Label::new(&self.unit_log).wrap());
                 })
             });
         });
@@ -118,37 +115,43 @@ impl SystemControlApp {
         } else {
             &self.system_units
         } {
-            if !name.contains(self.unit_filter.as_str()) {
+            if !name.contains(&self.unit_filter) {
                 continue;
             }
-            match unit.active.clone().as_str() {
+            match unit.active.as_str() {
+                "failed" => {}
+                _ if self.hide_success => continue,
                 _ if self.show_inactive => {}
-                "running" | "active" | "mounted" | "plugged" => {}
+                "active" => {}
                 _ => continue,
             }
-            let id = ui.make_persistent_id(name.clone().as_str().to_unescaped().unwrap());
+            let id = ui.make_persistent_id(name.to_unescaped().unwrap());
             egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false)
-                .show_header(ui, |ui| match unit.active.clone().as_str() {
-                    "running" | "active" | "mounted" | "plugged" if self.show_inactive => ui.add(
+                .show_header(ui, |ui| match unit.active.as_str() {
+                    "active" if self.show_inactive => ui.add(
                         egui::Label::new(
-                            egui::RichText::new(name.clone().as_str().to_unescaped().unwrap())
-                                .underline(),
+                            egui::RichText::new(name.to_unescaped().unwrap()).strong(),
                         )
                         .wrap(),
                     ),
-                    _ => ui.add(
-                        egui::Label::new(name.clone().as_str().to_unescaped().unwrap()).wrap(),
+                    "failed" if !self.hide_success => ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(name.to_unescaped().unwrap()).underline(),
+                        )
+                        .wrap(),
                     ),
+                    _ => ui.add(egui::Label::new(name.to_unescaped().unwrap()).wrap()),
                 })
                 .body(|ui| {
-                    ui.label(format!(
-                        "{}, {}, {}. {}",
-                        unit.description.clone(),
-                        unit.loaded.clone(),
-                        unit.active.clone(),
-                        unit.subunit.clone()
-                    ));
-                    ui.horizontal(|ui| {
+                    ui.add(egui::Label::new(&unit.description).wrap());
+                    ui.add(
+                        egui::Label::new(format!(
+                            "{}, {}, {}. {}",
+                            unit.loaded, unit.active, unit.substate, unit.subunit,
+                        ))
+                        .wrap(),
+                    );
+                    ui.horizontal_wrapped(|ui| {
                         if ui.button("Enable").clicked() {
                             let _ = async {
                                 let connection = connection()?;
@@ -184,7 +187,7 @@ impl SystemControlApp {
                         if ui.button("Logs").clicked() {
                             if user {
                                 match Command::new("journalctl")
-                                    .args(["--user", "-b0", "-u", name.clone().as_str()])
+                                    .args(["--user", "-b0", "-u", &name])
                                     .output()
                                 {
                                     Ok(output) => {
@@ -196,7 +199,7 @@ impl SystemControlApp {
                                 }
                             } else {
                                 match Command::new("journalctl")
-                                    .args(["-b0", "-u", name.clone().as_str()])
+                                    .args(["-b0", "-u", &name])
                                     .output()
                                 {
                                     Ok(output) => {

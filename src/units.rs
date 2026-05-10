@@ -66,7 +66,7 @@ pub async fn stop(connection: Connection, unit: String) -> Result<()> {
     Ok(())
 }
 
-type RawUnitInfo<'a> = Vec<(
+type RawUnitInfoList<'a> = Vec<(
     String,
     String,
     String,
@@ -84,12 +84,13 @@ pub struct UnitInfo {
     pub description: String,
     pub loaded: String,
     pub active: String,
+    pub substate: String,
     pub subunit: String,
 }
 
 pub async fn list_units(connection: Connection) -> Result<BTreeMap<String, UnitInfo>> {
     let mut result = BTreeMap::new();
-    for (name, _, description, loaded, active, subunit, _, _, _, _) in connection
+    for (name, description, loaded, active, substate, subunit, _, _, _, _) in connection
         .call_method(
             Some("org.freedesktop.systemd1"),
             "/org/freedesktop/systemd1",
@@ -99,7 +100,7 @@ pub async fn list_units(connection: Connection) -> Result<BTreeMap<String, UnitI
         )
         .await?
         .body()
-        .deserialize::<RawUnitInfo>()?
+        .deserialize::<RawUnitInfoList>()?
     {
         let _ = result.insert(
             name,
@@ -107,6 +108,7 @@ pub async fn list_units(connection: Connection) -> Result<BTreeMap<String, UnitI
                 description,
                 loaded,
                 active,
+                substate,
                 subunit,
             },
         );
