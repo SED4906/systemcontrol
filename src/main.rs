@@ -32,6 +32,7 @@ struct SystemControlApp {
     show_inactive: bool,
     hide_success: bool,
     unit_filter: String,
+    unit_type_filters: [bool; 11],
 }
 
 impl SystemControlApp {
@@ -44,61 +45,154 @@ impl SystemControlApp {
             show_inactive: true,
             hide_success: false,
             unit_filter: String::new(),
+            unit_type_filters: [true; 11],
         }
     }
 }
 
 impl eframe::App for SystemControlApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show_inside(ui, |ui| {
-            ui.horizontal(|ui| {
+        egui::Panel::top("Menu bar").show_inside(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
+                ui.menu_button("View", |ui| {
+                    ui.checkbox(&mut self.show_inactive, "Inactive");
+                    ui.checkbox(&mut self.hide_success, "Failed");
+                    ui.separator();
+                    ui.radio_value(&mut self.unit_type_filters, [true; 11], "All Types");
+                    ui.radio_value(
+                        &mut self.unit_type_filters,
+                        [
+                            true, false, false, false, false, false, false, false, false, false,
+                            false,
+                        ],
+                        "Services",
+                    );
+                    ui.radio_value(
+                        &mut self.unit_type_filters,
+                        [
+                            false, true, false, false, false, false, false, false, false, false,
+                            false,
+                        ],
+                        "Sockets",
+                    );
+                    ui.radio_value(
+                        &mut self.unit_type_filters,
+                        [
+                            false, false, true, false, false, false, false, false, false, false,
+                            false,
+                        ],
+                        "Devices",
+                    );
+                    ui.radio_value(
+                        &mut self.unit_type_filters,
+                        [
+                            false, false, false, true, false, false, false, false, false, false,
+                            false,
+                        ],
+                        "Mounts",
+                    );
+                    ui.radio_value(
+                        &mut self.unit_type_filters,
+                        [
+                            false, false, false, false, true, false, false, false, false, false,
+                            false,
+                        ],
+                        "Automounts",
+                    );
+                    ui.radio_value(
+                        &mut self.unit_type_filters,
+                        [
+                            false, false, false, false, false, true, false, false, false, false,
+                            false,
+                        ],
+                        "Swaps",
+                    );
+                    ui.radio_value(
+                        &mut self.unit_type_filters,
+                        [
+                            false, false, false, false, false, false, true, false, false, false,
+                            false,
+                        ],
+                        "Targets",
+                    );
+                    ui.radio_value(
+                        &mut self.unit_type_filters,
+                        [
+                            false, false, false, false, false, false, false, true, false, false,
+                            false,
+                        ],
+                        "Paths",
+                    );
+                    ui.radio_value(
+                        &mut self.unit_type_filters,
+                        [
+                            false, false, false, false, false, false, false, false, true, false,
+                            false,
+                        ],
+                        "Timers",
+                    );
+                    ui.radio_value(
+                        &mut self.unit_type_filters,
+                        [
+                            false, false, false, false, false, false, false, false, false, true,
+                            false,
+                        ],
+                        "Slices",
+                    );
+                    ui.radio_value(
+                        &mut self.unit_type_filters,
+                        [
+                            false, false, false, false, false, false, false, false, false, false,
+                            true,
+                        ],
+                        "Scopes",
+                    );
+                });
                 ui.add(egui::TextEdit::singleline(&mut self.unit_filter).hint_text("Filter..."));
-                ui.checkbox(&mut self.show_inactive, "Show Inactive");
-                ui.checkbox(&mut self.hide_success, "Failed");
                 self.refresh |= ui.button("Refresh").clicked();
             });
-            if self.refresh {
-                if let Ok(user_units) =
-                    async { units::list_units(Connection::session().await?).await }.block_on()
-                {
-                    self.user_units = user_units;
-                }
-                if let Ok(system_units) =
-                    async { units::list_units(Connection::system().await?).await }.block_on()
-                {
-                    self.system_units = system_units;
-                }
-
-                self.refresh = false;
+        });
+        if self.refresh {
+            if let Ok(user_units) =
+                async { units::list_units(Connection::session().await?).await }.block_on()
+            {
+                self.user_units = user_units;
             }
-            egui::Panel::left("User units").show_inside(ui, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.heading("User units");
-                });
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    self.unit_list(true, ui, || {
-                        async { Connection::session().await }.block_on()
-                    })
-                })
+            if let Ok(system_units) =
+                async { units::list_units(Connection::system().await?).await }.block_on()
+            {
+                self.system_units = system_units;
+            }
+
+            self.refresh = false;
+        }
+        egui::Panel::left("User units").show_inside(ui, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.heading("User units");
             });
-            egui::Panel::right("System units").show_inside(ui, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.heading("System units");
-                });
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    self.unit_list(false, ui, || {
-                        async { Connection::system().await }.block_on()
-                    })
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                self.unit_list(true, ui, || {
+                    async { Connection::session().await }.block_on()
                 })
+            })
+        });
+        egui::Panel::right("System units").show_inside(ui, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.heading("System units");
             });
-            egui::CentralPanel::default().show_inside(ui, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.heading("Unit log");
-                });
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.add(egui::Label::new(&self.unit_log).wrap());
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                self.unit_list(false, ui, || {
+                    async { Connection::system().await }.block_on()
                 })
+            })
+        });
+        egui::CentralPanel::default().show_inside(ui, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.heading("Unit log");
             });
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.add(egui::Label::new(&self.unit_log).wrap());
+            })
         });
     }
 }
@@ -115,7 +209,19 @@ impl SystemControlApp {
         } else {
             &self.system_units
         } {
-            if !name.contains(&self.unit_filter) {
+            if !name.contains(&self.unit_filter)
+                || (!self.unit_type_filters[0] && name.ends_with(".service"))
+                || (!self.unit_type_filters[1] && name.ends_with(".socket"))
+                || (!self.unit_type_filters[2] && name.ends_with(".device"))
+                || (!self.unit_type_filters[3] && name.ends_with(".mount"))
+                || (!self.unit_type_filters[4] && name.ends_with(".automount"))
+                || (!self.unit_type_filters[5] && name.ends_with(".swap"))
+                || (!self.unit_type_filters[6] && name.ends_with(".target"))
+                || (!self.unit_type_filters[7] && name.ends_with(".path"))
+                || (!self.unit_type_filters[8] && name.ends_with(".timer"))
+                || (!self.unit_type_filters[9] && name.ends_with(".slice"))
+                || (!self.unit_type_filters[10] && name.ends_with(".scope"))
+            {
                 continue;
             }
             match unit.active.as_str() {
