@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use zbus::{Connection, Result, proxy, zvariant::ObjectPath};
+use zbus::{Result, blocking::Connection, proxy, zvariant::ObjectPath};
+
+type R = Result<(bool, Vec<(String, String, String)>)>;
 
 #[proxy(
     default_service = "org.freedesktop.systemd1",
@@ -9,19 +11,10 @@ use zbus::{Connection, Result, proxy, zvariant::ObjectPath};
 )]
 pub trait Manager {
     #[zbus(allow_interactive_auth)]
-    fn enable_unit_files(
-        &self,
-        files: Vec<String>,
-        runtime: bool,
-        force: bool,
-    ) -> Result<(bool, Vec<(String, String, String)>)>;
+    fn enable_unit_files(&self, files: Vec<String>, runtime: bool, force: bool) -> R;
 
     #[zbus(allow_interactive_auth)]
-    fn disable_unit_files_with_flags_and_install_info(
-        &self,
-        files: Vec<String>,
-        flags: u64,
-    ) -> Result<(bool, Vec<(String, String, String)>)>;
+    fn disable_unit_files_with_flags_and_install_info(&self, files: Vec<String>, flags: u64) -> R;
 
     #[zbus(allow_interactive_auth)]
     fn start_unit(&self, name: String, mode: &str) -> Result<String>;
@@ -30,39 +23,27 @@ pub trait Manager {
     fn stop_unit(&self, name: String, mode: &str) -> Result<String>;
 }
 
-pub async fn manager_proxy(connection: &Connection) -> Result<ManagerProxy<'_>> {
-    ManagerProxy::builder(connection).build().await
+pub fn manager_proxy(connection: &Connection) -> Result<ManagerProxyBlocking<'_>> {
+    ManagerProxyBlocking::builder(connection).build()
 }
 
-pub async fn enable(connection: Connection, units: Vec<String>) -> Result<()> {
-    let _ = manager_proxy(&connection)
-        .await?
-        .enable_unit_files(units, false, false)
-        .await?;
+pub fn enable(connection_fn: fn() -> Result<Connection>, units: Vec<String>) -> Result<()> {
+    manager_proxy(&connection_fn()?)?.enable_unit_files(units, false, false)?;
     Ok(())
 }
 
-pub async fn disable(connection: Connection, units: Vec<String>) -> Result<()> {
-    let _ = manager_proxy(&connection)
-        .await?
-        .disable_unit_files_with_flags_and_install_info(units, 0)
-        .await?;
+pub fn disable(connection_fn: fn() -> Result<Connection>, units: Vec<String>) -> Result<()> {
+    manager_proxy(&connection_fn()?)?.disable_unit_files_with_flags_and_install_info(units, 0)?;
     Ok(())
 }
 
-pub async fn start(connection: Connection, unit: String) -> Result<()> {
-    let _ = manager_proxy(&connection)
-        .await?
-        .start_unit(unit, "replace")
-        .await?;
+pub fn start(connection_fn: fn() -> zbus::Result<Connection>, unit: String) -> Result<()> {
+    manager_proxy(&connection_fn()?)?.start_unit(unit, "replace")?;
     Ok(())
 }
 
-pub async fn stop(connection: Connection, unit: String) -> Result<()> {
-    let _ = manager_proxy(&connection)
-        .await?
-        .stop_unit(unit, "replace")
-        .await?;
+pub fn stop(connection_fn: fn() -> zbus::Result<Connection>, unit: String) -> Result<()> {
+    manager_proxy(&connection_fn()?)?.stop_unit(unit, "replace")?;
     Ok(())
 }
 
@@ -88,7 +69,7 @@ pub struct UnitInfo {
     pub subunit: String,
 }
 
-pub async fn list_units(connection: Connection) -> Result<BTreeMap<String, UnitInfo>> {
+pub fn list_units(connection: Connection) -> Result<BTreeMap<String, UnitInfo>> {
     let mut result = BTreeMap::new();
     for (name, description, loaded, active, substate, subunit, _, _, _, _) in connection
         .call_method(
@@ -97,8 +78,7 @@ pub async fn list_units(connection: Connection) -> Result<BTreeMap<String, UnitI
             Some("org.freedesktop.systemd1.Manager"),
             "ListUnits",
             &(),
-        )
-        .await?
+        )?
         .body()
         .deserialize::<RawUnitInfoList>()?
     {

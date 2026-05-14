@@ -1,21 +1,16 @@
 [package]
 name = "systemcontrol"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 
 [dependencies]
 zbus = "5.15.0"
 descape = "3.0.0"
-pollster = "0.4.0"
 
 [dependencies.eframe]
 version = "0.34.2"
 default-features = false
 features = ["wayland", "wgpu", "default_fonts"]
-
-[dependencies.tokio]
-version = "1.52.2"
-features = ["rt", "rt-multi-thread", "time"]
 
 [profile.release]
 strip = true

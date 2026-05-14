@@ -1,26 +1,19 @@
 mod units;
 
-use std::{collections::BTreeMap, error::Error, process::Command, time::Duration, vec};
+use std::{collections::BTreeMap, process::Command, vec};
 
 use descape::UnescapeExt;
 use eframe::egui;
-use pollster::FutureExt;
-use tokio::runtime::Runtime;
-use zbus::Connection;
+use zbus::blocking::Connection;
 
 use crate::units::UnitInfo;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let rt = Runtime::new()?;
-    let _enter = rt.enter();
-    let _dbus_thread = rt.spawn(async { tokio::time::sleep(Duration::MAX).await });
-    let native_options = eframe::NativeOptions::default();
-    let _ = eframe::run_native(
+fn main() -> eframe::Result {
+    eframe::run_native(
         "System Control",
-        native_options,
+        eframe::NativeOptions::default(),
         Box::new(|cc| Ok(Box::new(SystemControlApp::new(cc)))),
-    )?;
-    Ok(())
+    )
 }
 
 #[derive(Default)]
@@ -30,136 +23,71 @@ struct SystemControlApp {
     unit_log: String,
     refresh: bool,
     show_inactive: bool,
-    hide_success: bool,
-    unit_filter: String,
-    unit_type_filters: [bool; 11],
+    show_failed_only: bool,
+    name_filter: String,
+    type_filter: TypeFilter,
 }
 
 impl SystemControlApp {
-    fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(_: &eframe::CreationContext<'_>) -> Self {
         Self {
             refresh: true,
-            user_units: BTreeMap::new(),
-            system_units: BTreeMap::new(),
-            unit_log: String::new(),
             show_inactive: true,
-            hide_success: false,
-            unit_filter: String::new(),
-            unit_type_filters: [true; 11],
+            ..Default::default()
         }
     }
 }
 
+#[derive(Default, PartialEq)]
+pub enum TypeFilter {
+    #[default]
+    All,
+    Services,
+    Sockets,
+    Devices,
+    Mounts,
+    Automounts,
+    Swaps,
+    Targets,
+    Paths,
+    Timers,
+    Slices,
+    Scopes,
+}
+
 impl eframe::App for SystemControlApp {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _: &mut eframe::Frame) {
         egui::Panel::top("Menu bar").show_inside(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("View", |ui| {
                     ui.checkbox(&mut self.show_inactive, "Inactive");
-                    ui.checkbox(&mut self.hide_success, "Failed");
+                    ui.checkbox(&mut self.show_failed_only, "Failed");
                     ui.separator();
-                    ui.radio_value(&mut self.unit_type_filters, [true; 11], "All Types");
-                    ui.radio_value(
-                        &mut self.unit_type_filters,
-                        [
-                            true, false, false, false, false, false, false, false, false, false,
-                            false,
-                        ],
-                        "Services",
-                    );
-                    ui.radio_value(
-                        &mut self.unit_type_filters,
-                        [
-                            false, true, false, false, false, false, false, false, false, false,
-                            false,
-                        ],
-                        "Sockets",
-                    );
-                    ui.radio_value(
-                        &mut self.unit_type_filters,
-                        [
-                            false, false, true, false, false, false, false, false, false, false,
-                            false,
-                        ],
-                        "Devices",
-                    );
-                    ui.radio_value(
-                        &mut self.unit_type_filters,
-                        [
-                            false, false, false, true, false, false, false, false, false, false,
-                            false,
-                        ],
-                        "Mounts",
-                    );
-                    ui.radio_value(
-                        &mut self.unit_type_filters,
-                        [
-                            false, false, false, false, true, false, false, false, false, false,
-                            false,
-                        ],
-                        "Automounts",
-                    );
-                    ui.radio_value(
-                        &mut self.unit_type_filters,
-                        [
-                            false, false, false, false, false, true, false, false, false, false,
-                            false,
-                        ],
-                        "Swaps",
-                    );
-                    ui.radio_value(
-                        &mut self.unit_type_filters,
-                        [
-                            false, false, false, false, false, false, true, false, false, false,
-                            false,
-                        ],
-                        "Targets",
-                    );
-                    ui.radio_value(
-                        &mut self.unit_type_filters,
-                        [
-                            false, false, false, false, false, false, false, true, false, false,
-                            false,
-                        ],
-                        "Paths",
-                    );
-                    ui.radio_value(
-                        &mut self.unit_type_filters,
-                        [
-                            false, false, false, false, false, false, false, false, true, false,
-                            false,
-                        ],
-                        "Timers",
-                    );
-                    ui.radio_value(
-                        &mut self.unit_type_filters,
-                        [
-                            false, false, false, false, false, false, false, false, false, true,
-                            false,
-                        ],
-                        "Slices",
-                    );
-                    ui.radio_value(
-                        &mut self.unit_type_filters,
-                        [
-                            false, false, false, false, false, false, false, false, false, false,
-                            true,
-                        ],
-                        "Scopes",
-                    );
+                    ui.radio_value(&mut self.type_filter, TypeFilter::All, "All Types");
+                    ui.radio_value(&mut self.type_filter, TypeFilter::Services, "Services");
+                    ui.radio_value(&mut self.type_filter, TypeFilter::Sockets, "Sockets");
+                    ui.radio_value(&mut self.type_filter, TypeFilter::Devices, "Devices");
+                    ui.radio_value(&mut self.type_filter, TypeFilter::Mounts, "Mounts");
+                    ui.radio_value(&mut self.type_filter, TypeFilter::Automounts, "Automounts");
+                    ui.radio_value(&mut self.type_filter, TypeFilter::Swaps, "Swaps");
+                    ui.radio_value(&mut self.type_filter, TypeFilter::Targets, "Targets");
+                    ui.radio_value(&mut self.type_filter, TypeFilter::Paths, "Paths");
+                    ui.radio_value(&mut self.type_filter, TypeFilter::Timers, "Timers");
+                    ui.radio_value(&mut self.type_filter, TypeFilter::Slices, "Slices");
+                    ui.radio_value(&mut self.type_filter, TypeFilter::Scopes, "Scopes");
                 });
-                ui.add(egui::TextEdit::singleline(&mut self.unit_filter).hint_text("Filter..."));
+                ui.add(egui::TextEdit::singleline(&mut self.name_filter).hint_text("Filter..."));
                 self.refresh |= ui.button("Refresh").clicked();
             });
         });
         if self.refresh {
-            if let Ok(user_units) =
-                async { units::list_units(Connection::session().await?).await }.block_on()
+            if let Ok(connection) = Connection::session()
+                && let Ok(user_units) = units::list_units(connection)
             {
                 self.user_units = user_units;
             }
-            if let Ok(system_units) =
-                async { units::list_units(Connection::system().await?).await }.block_on()
+            if let Ok(connection) = Connection::system()
+                && let Ok(system_units) = units::list_units(connection)
             {
                 self.system_units = system_units;
             }
@@ -170,21 +98,15 @@ impl eframe::App for SystemControlApp {
             ui.vertical_centered(|ui| {
                 ui.heading("User units");
             });
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                self.unit_list(true, ui, || {
-                    async { Connection::session().await }.block_on()
-                })
-            })
+            egui::ScrollArea::vertical()
+                .show(ui, |ui| self.unit_list(true, ui, Connection::session))
         });
         egui::Panel::right("System units").show_inside(ui, |ui| {
             ui.vertical_centered(|ui| {
                 ui.heading("System units");
             });
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                self.unit_list(false, ui, || {
-                    async { Connection::system().await }.block_on()
-                })
-            })
+            egui::ScrollArea::vertical()
+                .show(ui, |ui| self.unit_list(false, ui, Connection::system))
         });
         egui::CentralPanel::default().show_inside(ui, |ui| {
             ui.vertical_centered(|ui| {
@@ -202,51 +124,46 @@ impl SystemControlApp {
         &mut self,
         user: bool,
         ui: &mut egui::Ui,
-        connection: fn() -> zbus::Result<Connection>,
+        connection_fn: fn() -> zbus::Result<Connection>,
     ) {
         for (name, unit) in if user {
             &self.user_units
         } else {
             &self.system_units
         } {
-            if !name.contains(&self.unit_filter)
-                || (!self.unit_type_filters[0] && name.ends_with(".service"))
-                || (!self.unit_type_filters[1] && name.ends_with(".socket"))
-                || (!self.unit_type_filters[2] && name.ends_with(".device"))
-                || (!self.unit_type_filters[3] && name.ends_with(".mount"))
-                || (!self.unit_type_filters[4] && name.ends_with(".automount"))
-                || (!self.unit_type_filters[5] && name.ends_with(".swap"))
-                || (!self.unit_type_filters[6] && name.ends_with(".target"))
-                || (!self.unit_type_filters[7] && name.ends_with(".path"))
-                || (!self.unit_type_filters[8] && name.ends_with(".timer"))
-                || (!self.unit_type_filters[9] && name.ends_with(".slice"))
-                || (!self.unit_type_filters[10] && name.ends_with(".scope"))
+            if !name.contains(&self.name_filter)
+                || (self.type_filter == TypeFilter::Services && !name.ends_with(".service"))
+                || (self.type_filter == TypeFilter::Sockets && !name.ends_with(".socket"))
+                || (self.type_filter == TypeFilter::Devices && !name.ends_with(".device"))
+                || (self.type_filter == TypeFilter::Mounts && !name.ends_with(".mount"))
+                || (self.type_filter == TypeFilter::Automounts && !name.ends_with(".automount"))
+                || (self.type_filter == TypeFilter::Swaps && !name.ends_with(".swap"))
+                || (self.type_filter == TypeFilter::Targets && !name.ends_with(".target"))
+                || (self.type_filter == TypeFilter::Paths && !name.ends_with(".path"))
+                || (self.type_filter == TypeFilter::Timers && !name.ends_with(".timer"))
+                || (self.type_filter == TypeFilter::Slices && !name.ends_with(".slice"))
+                || (self.type_filter == TypeFilter::Scopes && !name.ends_with(".scope"))
             {
                 continue;
             }
             match unit.active.as_str() {
                 "failed" => {}
-                _ if self.hide_success => continue,
+                _ if self.show_failed_only => continue,
                 _ if self.show_inactive => {}
                 "active" => {}
                 _ => continue,
             }
-            let id = ui.make_persistent_id(name.to_unescaped().unwrap());
+            let name_u = name.to_unescaped().unwrap();
+            let id = ui.make_persistent_id(name_u.clone());
             egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false)
                 .show_header(ui, |ui| match unit.active.as_str() {
-                    "active" if self.show_inactive => ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(name.to_unescaped().unwrap()).strong(),
-                        )
-                        .wrap(),
-                    ),
-                    "failed" if !self.hide_success => ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(name.to_unescaped().unwrap()).underline(),
-                        )
-                        .wrap(),
-                    ),
-                    _ => ui.add(egui::Label::new(name.to_unescaped().unwrap()).wrap()),
+                    "active" if self.show_inactive => {
+                        ui.add(egui::Label::new(egui::RichText::new(name_u).strong()).wrap())
+                    }
+                    "failed" if !self.show_failed_only => {
+                        ui.add(egui::Label::new(egui::RichText::new(name_u).underline()).wrap())
+                    }
+                    _ => ui.add(egui::Label::new(name_u).wrap()),
                 })
                 .body(|ui| {
                     ui.add(egui::Label::new(&unit.description).wrap());
@@ -259,63 +176,34 @@ impl SystemControlApp {
                     );
                     ui.horizontal_wrapped(|ui| {
                         if ui.button("Enable").clicked() {
-                            let _ = async {
-                                let connection = connection()?;
-                                units::enable(connection, vec![name.clone()]).await
-                            }
-                            .block_on();
+                            let _ = units::enable(connection_fn, vec![name.clone()]);
                             self.refresh = true;
                         }
                         if ui.button("Disable").clicked() {
-                            let _ = async {
-                                let connection = connection()?;
-                                units::disable(connection, vec![name.clone()]).await
-                            }
-                            .block_on();
+                            let _ = units::disable(connection_fn, vec![name.clone()]);
                             self.refresh = true;
                         }
                         if ui.button("Start").clicked() {
-                            let _ = async {
-                                let connection = connection()?;
-                                units::start(connection, name.clone()).await
-                            }
-                            .block_on();
+                            let _ = units::start(connection_fn, name.clone());
                             self.refresh = true;
                         }
                         if ui.button("Stop").clicked() {
-                            let _ = async {
-                                let connection = connection()?;
-                                units::stop(connection, name.clone()).await
-                            }
-                            .block_on();
+                            let _ = units::stop(connection_fn, name.clone());
                             self.refresh = true;
                         }
                         if ui.button("Logs").clicked() {
-                            if user {
-                                match Command::new("journalctl")
-                                    .args(["--user", "-b0", "-u", &name])
-                                    .output()
-                                {
-                                    Ok(output) => {
-                                        if let Ok(output) = String::from_utf8(output.stdout) {
-                                            self.unit_log = output;
-                                        }
+                            let _ = Command::new("journalctl")
+                                .args(if user {
+                                    vec!["--user", "-b0", "-u", &name]
+                                } else {
+                                    vec!["-b0", "-u", &name]
+                                })
+                                .output()
+                                .inspect(|output| {
+                                    if let Ok(output) = String::from_utf8(output.stdout.clone()) {
+                                        self.unit_log = output;
                                     }
-                                    _ => {}
-                                }
-                            } else {
-                                match Command::new("journalctl")
-                                    .args(["-b0", "-u", &name])
-                                    .output()
-                                {
-                                    Ok(output) => {
-                                        if let Ok(output) = String::from_utf8(output.stdout) {
-                                            self.unit_log = output;
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                            }
+                                });
                         }
                     })
                 });
