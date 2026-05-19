@@ -55,6 +55,18 @@ pub enum TypeFilter {
     Scopes,
 }
 
+macro_rules! label {
+    ($ui:ident, $e:expr) => {
+        $ui.add(egui::Label::new($e).wrap())
+    };
+    (B $ui:ident, $e:expr) => {
+        $ui.add(egui::Label::new(egui::RichText::new($e).strong()).wrap())
+    };
+    (U $ui:ident, $e:expr) => {
+        $ui.add(egui::Label::new(egui::RichText::new($e).underline()).wrap())
+    };
+}
+
 impl eframe::App for SystemControlApp {
     fn ui(&mut self, ui: &mut egui::Ui, _: &mut eframe::Frame) {
         egui::Panel::top("Menu bar").show_inside(ui, |ui| {
@@ -80,20 +92,7 @@ impl eframe::App for SystemControlApp {
                 self.refresh |= ui.button("Refresh").clicked();
             });
         });
-        if self.refresh {
-            if let Ok(connection) = Connection::session()
-                && let Ok(user_units) = units::list_units(connection)
-            {
-                self.user_units = user_units;
-            }
-            if let Ok(connection) = Connection::system()
-                && let Ok(system_units) = units::list_units(connection)
-            {
-                self.system_units = system_units;
-            }
-
-            self.refresh = false;
-        }
+        self.do_refresh();
         egui::Panel::left("User units").show_inside(ui, |ui| {
             ui.vertical_centered(|ui| {
                 ui.heading("User units");
@@ -113,13 +112,29 @@ impl eframe::App for SystemControlApp {
                 ui.heading("Unit log");
             });
             egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.add(egui::Label::new(&self.unit_log).wrap());
+                label!(ui, &self.unit_log);
             })
         });
     }
 }
 
 impl SystemControlApp {
+    fn do_refresh(&mut self) {
+        if self.refresh {
+            if let Ok(connection) = Connection::session()
+                && let Ok(user_units) = units::list_units(connection)
+            {
+                self.user_units = user_units;
+            }
+            if let Ok(connection) = Connection::system()
+                && let Ok(system_units) = units::list_units(connection)
+            {
+                self.system_units = system_units;
+            }
+            self.refresh = false;
+        }
+    }
+
     fn unit_list(
         &mut self,
         user: bool,
@@ -157,22 +172,17 @@ impl SystemControlApp {
             let id = ui.make_persistent_id(name_u.clone());
             egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false)
                 .show_header(ui, |ui| match unit.active.as_str() {
-                    "active" if self.show_inactive => {
-                        ui.add(egui::Label::new(egui::RichText::new(name_u).strong()).wrap())
-                    }
-                    "failed" if !self.show_failed_only => {
-                        ui.add(egui::Label::new(egui::RichText::new(name_u).underline()).wrap())
-                    }
-                    _ => ui.add(egui::Label::new(name_u).wrap()),
+                    "active" if self.show_inactive => label!(B ui, name_u),
+                    "failed" if !self.show_failed_only => label!(U ui, name_u),
+                    _ => label!(ui, name_u),
                 })
                 .body(|ui| {
-                    ui.add(egui::Label::new(&unit.description).wrap());
-                    ui.add(
-                        egui::Label::new(format!(
-                            "{}, {}, {}. {}",
-                            unit.loaded, unit.active, unit.substate, unit.subunit,
-                        ))
-                        .wrap(),
+                    label!(
+                        ui,
+                        format!(
+                            "{}\n{}, {}, {}. {}",
+                            unit.description, unit.loaded, unit.active, unit.substate, unit.subunit,
+                        )
                     );
                     ui.horizontal_wrapped(|ui| {
                         if ui.button("Enable").clicked() {
